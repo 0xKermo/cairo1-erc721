@@ -284,7 +284,7 @@ mod erc721 {
         let (res, rem) = u128_safe_divmod(num, u128_as_non_zero(base));
         data.append(rem.into());
         num = res;
-        return split_digits(res, base, ref data);
+        return split_digits(num, base, ref data);
     }
 
 
