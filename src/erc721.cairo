@@ -15,6 +15,12 @@ mod erc721 {
     use array::array_new;
     use array::array_append;
     use hash::LegacyHash;
+    
+    const MAX_SUPPLY:felt252 = 1000;
+    const WL_SUPPLY:felt252 = 100;
+    const WL_PER_ADDRESS:felt252= 1;
+    const PUBLIC_PER_ADDRESS:felt252= 1;
+    
 
     struct Storage {
         _name: felt252,
@@ -87,7 +93,6 @@ mod erc721 {
     fn total_supply() -> u256 {
         _total_supply::read()
     }
-
 
     #[view]
     fn token_uri(token_id: u256) -> Array::<felt252> {
@@ -180,7 +185,9 @@ mod erc721 {
 
     #[external]
     fn transfer_from(from: ContractAddress, to: ContractAddress, token_id: u256) {
-        assert(_is_approved_or_owner(from, token_id), 'Caller is not owner or appvored');
+        _require_minted(token_id);
+        let is_approved = _is_approved_or_owner(get_caller_address(), token_id);
+        assert(is_approved, 'ERC721: transfer caller is not owner nor approved');
         _transfer(from, to, token_id);
     }
 
@@ -228,6 +235,7 @@ mod erc721 {
         // ContractAddress equation is not supported so into() is used here
         assert(owner.into() != operator.into(), 'ERC721: approve to caller');
         assert(!owner.is_zero() | !operator.is_zero(), 'caller or operator zero address');
+        assert(approved | !approved, 'ERC721: approve value invalid');
         operator_approvals::write((owner, operator), approved);
         ApprovalForAll(owner, operator, approved);
     }
