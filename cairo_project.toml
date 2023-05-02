@@ -1,4 +1,3 @@
 [crate_roots]
 erc721 = "src"
-utils = "src/utils"
 

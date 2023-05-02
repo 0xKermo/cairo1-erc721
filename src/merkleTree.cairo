@@ -1,77 +1,51 @@
-use array::SpanTrait;
 use hash::LegacyHash;
 use traits::Into;
+use gas::withdraw_gas_all;
+use array::array_new;
+use array::array_append;
+use array::ArrayTrait;
 
-/// MerkleTree representation.
-#[derive(Drop)]
-struct MerkleTree {}
-
-/// MerkleTree trait.
-trait MerkleTreeTrait {
-    /// Create a new merkle tree instance.
-    fn new() -> MerkleTree;
-    /// Compute the merkle root of a given proof.
-    fn compute_root(ref self: MerkleTree, current_node: felt252, proof: Span<felt252>) -> felt252;
-    /// Verify a merkle proof.
-    fn verify(ref self: MerkleTree, root: felt252, leaf: felt252, proof: Span<felt252>) -> bool;
+fn merkle_verify(root:felt252, leaf: felt252, ref proof: Array::<felt252>) -> bool {
+    let proof_len = proof.len();
+    let calc_root = _merkle_verify_body(leaf, ref proof, proof_len, 0_u32);
+    if (calc_root == root) {
+        return true;
+    } else {
+        return false;
+    }
 }
 
-/// MerkleTree implementation.
-impl MerkleTreeImpl of MerkleTreeTrait {
-    /// Create a new merkle tree instance.
-    #[inline(always)]
-    fn new() -> MerkleTree {
-        MerkleTree {}
+
+fn _merkle_verify_body(
+    leaf: felt252, ref proof: Array::<felt252>, proof_len: u32, index: u32
+) -> felt252 {
+    match gas::withdraw_gas_all(get_builtin_costs()) {
+        Option::Some(_) => {},
+        Option::None(_) => {
+            let mut data = ArrayTrait::new();
+            data.append('Out of gas');
+            panic(data);
+        },
     }
-
-    /// Compute the merkle root of a given proof.
-    /// # Arguments
-    /// * `current_node` - The current node of the proof.
-    /// * `proof` - The proof.
-    /// # Returns
-    /// The merkle root.
-    fn compute_root(
-        ref self: MerkleTree, mut current_node: felt252, mut proof: Span<felt252>
-    ) -> felt252 {
-        let mut proof_len = proof.len();
-        let mut current_node = current_node;
-        let mut proof_index = 0;
-
-        // TODO We could pop_front proof and get rid of proof_len and proof_index
-        // But due to a bug it cannot atm. 
-        loop {
-            quaireaux_utils::check_gas();
-
-            if proof_len == 0 {
-                break current_node;
-            }
-            // Get the next element of the proof.
-            let proof_element = *proof[proof_index];
-
-            // Compute the hash of the current node and the current element of the proof.
-            // We need to check if the current node is smaller than the current element of the proof.
-            // If it is, we need to swap the order of the hash.
-            if current_node.into() < proof_element.into() {
-                current_node = LegacyHash::hash(current_node, proof_element);
-            } else {
-                current_node = LegacyHash::hash(proof_element, current_node);
-            }
-            proof_index = proof_index + 1;
-            proof_len = proof_len - 1;
-        }
+    if (proof_len == 0_u32) {
+        return leaf;
     }
+    let n = _hash_sorted(leaf, *proof.at(index));
+    return _merkle_verify_body(n, ref proof, proof_len - 1_u32, index + 1_u32);
+}
 
-    /// Verify a merkle proof.
-    /// # Arguments
-    /// * `root` - The merkle root.
-    /// * `leaf` - The leaf to verify.
-    /// * `proof` - The proof.
-    /// # Returns
-    /// True if the proof is valid, false otherwise.
-    fn verify(
-        ref self: MerkleTree, root: felt252, leaf: felt252, mut proof: Span<felt252>
-    ) -> bool {
-        let computed_root = self.compute_root(leaf, proof);
-        computed_root == root
+fn _hash_sorted(a: felt252, b: felt252) -> felt252 {
+        match withdraw_gas() {
+        Option::Some(_) => {},
+        Option::None(_) => {
+            let mut data = array_new::<felt252>();
+            array_append::<felt252>(ref data, 'OOG');
+            panic(data);
+        },
+    }
+    if (a.into() < b.into()) {
+        return LegacyHash::hash(a, b);
+    } else {
+        return LegacyHash::hash(b, a);
     }
 }

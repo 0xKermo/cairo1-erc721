@@ -1,3 +1,3 @@
-mod erc721;
 mod utils;
+mod erc721;
 mod merkleTree;

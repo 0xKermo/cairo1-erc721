@@ -11,9 +11,11 @@ mod erc721 {
     use integer::u128_safe_divmod;
     use integer::u128_as_non_zero;
     use gas::withdraw_gas;
+    use gas::withdraw_gas_all;
     use array::array_new;
     use array::array_append;
-    
+    use hash::LegacyHash;
+
     struct Storage {
         _name: felt252,
         _symbol: felt252,
@@ -26,6 +28,7 @@ mod erc721 {
         base_uri: LegacyMap::<felt252, felt252>, // (id, uri)
         base_uri_len: felt252,
         contract_owner: ContractAddress,
+        _merkle_root:felt252,
     }
 
     #[event]
@@ -38,10 +41,11 @@ mod erc721 {
     fn ApprovalForAll(owner: ContractAddress, operator: ContractAddress, approved: bool) {}
 
     #[constructor]
-    fn constructor(name_: felt252, symbol_: felt252, owner_: ContractAddress) {
+    fn constructor(name_: felt252, symbol_: felt252, owner_: ContractAddress,root:felt252) {
         _name::write(name_);
         _symbol::write(symbol_);
         contract_owner::write(owner_);
+        _merkle_root::write(root);
     }
 
     #[view]
@@ -124,6 +128,11 @@ mod erc721 {
         contract_owner::read()
     }
 
+    #[view]
+    fn merkle_root() -> felt252 {
+        _merkle_root::read()
+    }
+
     #[external]
     fn set_base_uri(mut uri: Array::<felt252>) {
         only_owner();
@@ -189,9 +198,25 @@ mod erc721 {
     }
 
     #[external]
+    fn wl_mint(mut proof: Array::<felt252>) {
+        let token_id = _total_supply::read();
+        let mut root = _merkle_root::read();
+        let leaf = LegacyHash::hash(get_caller_address().into(),get_caller_address().into());
+        let res = merkle_verify(root,leaf, ref proof);
+        assert(res, 'proof verification failed');
+        _mint(get_caller_address(), token_id + 1.into());
+    }
+    
+     #[external]
     fn mint() {
         let token_id = _total_supply::read();
-        _mint(get_caller_address(), token_id+1.into());
+        _mint(get_caller_address(), token_id + 1.into());
+    }
+
+    #[external]
+    fn set_merkle_root(merkle_root_:felt252) {
+        only_owner();
+        _merkle_root::write(merkle_root_);
     }
 
     fn _approve(to: ContractAddress, token_id: u256) {
@@ -308,4 +333,51 @@ mod erc721 {
         array_1.append(*array_2.at(array_2_len - 1_u32));
         return merge_arrays(ref array_1, array_1_len, ref array_2, array_2_len - 1_u32);
     }
+
+// Merkle tree verification
+    fn merkle_verify(root:felt252, leaf: felt252, ref proof: Array::<felt252>) -> bool {
+        let proof_len = proof.len();
+        let calc_root = _merkle_verify_body(leaf, ref proof, proof_len, 0_u32);
+        if (calc_root == root) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+
+    fn _merkle_verify_body(
+        leaf: felt252, ref proof: Array::<felt252>, proof_len: u32, index: u32
+    ) -> felt252 {
+       match gas::withdraw_gas_all(get_builtin_costs()) {
+            Option::Some(_) => {},
+            Option::None(_) => {
+                let mut data = ArrayTrait::new();
+                data.append('Out of gas');
+                panic(data);
+            },
+        }
+        if (proof_len == 0_u32) {
+            return leaf;
+        }
+        let n = _hash_sorted(leaf, *proof.at(index));
+        return _merkle_verify_body(n, ref proof, proof_len - 1_u32, index + 1_u32);
+    }
+
+    fn _hash_sorted(a: felt252, b: felt252) -> felt252 {
+          match withdraw_gas() {
+            Option::Some(_) => {},
+            Option::None(_) => {
+                let mut data = array_new::<felt252>();
+                array_append::<felt252>(ref data, 'OOG');
+                panic(data);
+            },
+        }
+        if (a.into() < b.into()) {
+            return LegacyHash::hash(a, b);
+        } else {
+            return LegacyHash::hash(b, a);
+        }
+    }
+
 }
